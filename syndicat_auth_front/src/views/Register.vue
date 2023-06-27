@@ -6,6 +6,7 @@ export default {
         return {
             gr_sang: ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
             message: '',
+            loading: false,
             status: false,
             data: {
                 nom: '',
@@ -59,23 +60,29 @@ export default {
         });
     },
     methods: {
+
         // chargement des images
         onPermisRectoChange(event) {
             this.img.permis_recto = event.target.files[0];
-            this.handle.permis_recto_url = URL.createObjectURL(this.img.permis_recto)
+            this.handle.permis_recto_url = URL.createObjectURL(this.img.permis_recto);
+            this.performOCRAndCompare();
         },
         onPermisVersoChange(event) {
             this.img.permis_verso = event.target.files[0];
-            this.handle.permis_verso_url = URL.createObjectURL(this.img.permis_verso)
+            this.handle.permis_verso_url = URL.createObjectURL(this.img.permis_verso);
+            this.performOCRAndCompare();
         },
         onCniRectoChange(event) {
             this.img.cni_recto = event.target.files[0];
-            this.handle.cni_recto_url = URL.createObjectURL(this.img.cni_recto)
+            this.handle.cni_recto_url = URL.createObjectURL(this.img.cni_recto);
+            this.performOCRAndCompare();
         },
         onCniVersoChange(event) {
             this.img.cni_verso = event.target.files[0];
-            this.handle.cni_verso_url = URL.createObjectURL(this.img.cni_verso)
+            this.handle.cni_verso_url = URL.createObjectURL(this.img.cni_verso);
+            this.performOCRAndCompare();
         },
+
         // Méthode pour convertir le format de la date
         convertDateFormat(date) {
             // Sépare la date en année, mois et jour
@@ -95,16 +102,23 @@ export default {
         },
         onCNIExpireChange() {
             const cni_e_update = this.data.cni_expire.replace(/-/g, '/')
-            const formattedDate = this.convertDateFormat(cni_e_update);
+            const formattedDate = this.convertDateFormatF(cni_e_update);
             this.handle.cni_e = formattedDate;
+        },
+        showAlert() {
+            // Use sweetalert2
+            this.$swal('Vos documents ne sont pas conformes à ce que vous avez entré!!!');
         },
         // 
         async addSyndicat() {
             try {
-                const permisRectoText = await performOCR(this.handle.permis_recto_url);
-                const permisVersoText = await performOCR(this.handle.permis_verso_url);
-                const cniRectoText = await performOCR(this.handle.cni_recto_url);
-                const cniVersoText = await performOCR(this.handle.cni_verso_url);
+                this.loading = true
+                const [permisRectoText, permisVersoText, cniRectoText, cniVersoText] = await Promise.all([
+                    performOCR(this.handle.permis_recto_url),
+                    performOCR(this.handle.permis_verso_url),
+                    performOCR(this.handle.cni_recto_url),
+                    performOCR(this.handle.cni_verso_url)
+                ]);
 
                 // replace letter
                 this.data.num_cni = this.data.num_cni.replace(/i/gi, "l");
@@ -118,39 +132,55 @@ export default {
                     cniRectoText.includes(this.handle.cni_e)
                 ) {
                     // Les valeurs correspondent, vous pouvez procéder à la soumission du formulaire
-                    // ...
-                    console.log("yes")
+                    console.log("yes");
 
                     // Soumission du formulaire
-                    const response = await syndicat_add(this.data.nom, this.data.prenom, this.data.date_naissance, this.data.lieu_naissance, this.data.domicile, this.data.contact, this.data.categorie, this.data.fonction, this.data.num_permis, this.data.num_cni, this.data.sang);
+                    const response = await syndicat_add(
+                        this.data.nom,
+                        this.data.prenom,
+                        this.data.date_naissance,
+                        this.data.lieu_naissance,
+                        this.data.domicile,
+                        this.data.contact,
+                        this.data.categorie,
+                        this.data.fonction,
+                        this.data.num_permis,
+                        this.data.num_cni,
+                        this.data.sang
+                    );
 
-                    // on vérifie si l'insertion a été éffectué
+                    // on vérifie si l'insertion a été effectuée
                     if (response.status === true) {
-                        // En registrement de l'ID de l'utilisateur
-                        const userId = response.syndicat_id
-                        this.$store.commit('setUserId', userId);
+                        // Enregistrement de l'ID de l'utilisateur
+                        const userId = response.syndicat_id;
+                        this.$store.commit("setUserId", userId);
 
-                        this.$router.push('/payement')
+                        this.$router.push("/payement");
                     } else {
-                        this.message = "Une erreur est survenue lors de l'enregistrement des informations"
-                        console.log('erreur')
+                        this.message = "Une erreur est survenue lors de l'enregistrement des informations";
+                        console.log("erreur");
                     }
                 } else {
                     // Les valeurs ne correspondent pas, affichez un message d'erreur ou effectuez une autre action
                     // ...
-                    console.log('no')
-                    console.log(this.data.num_cni)
-                    console.log(this.data.nom)
-                    console.log(this.data.prenom)
-                    console.log(this.handle.date_n)
-                    console.log(this.handle.cni_e)
-                    console.log(this.data.lieu_naissance)
-
-                    // 
-                    console.log(cniRectoText)
+                    this.showAlert();
+                    this.loading = false
                 }
             } catch (error) {
-                console.log(error)
+                console.log(error);
+            }
+        },
+
+        performOCRAndCompare() {
+            const {
+                permis_recto_url,
+                permis_verso_url,
+                cni_recto_url,
+                cni_verso_url
+            } = this.handle;
+
+            if (permis_recto_url && permis_verso_url && cni_recto_url && cni_verso_url) {
+                this.addSyndicat();
             }
         },
 
@@ -172,6 +202,10 @@ export default {
 <template>
     <div class="body">
         <div class="container">
+            <div v-if="loading" class="loading">
+                <p>Chargement en cours...</p>
+                <!-- Ajoutez ici le code HTML ou les composants pour la page de chargement -->
+            </div>
             <header>Registration</header>
             <form action="#" ref="form" @submit.prevent="addSyndicat">
                 <div class="form first">
@@ -328,6 +362,21 @@ export default {
     margin: 0 15px;
     background-color: #fff;
     box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+}
+
+
+.loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.8);
+    z-index: 999;
 }
 
 .container header {
